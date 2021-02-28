@@ -1,0 +1,14 @@
+{
+  "name": "nodejs-udemy",
+  "version": "1.0.0",
+  "description": "NodeJs Udemy Tutorial - 2021/02",
+  "main": "createmodule.js",
+  "dependencies": {},
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon app.js"
+  },
+  "author": "Yoshaa",
+  "license": "ISC"
+}
