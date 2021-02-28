@@ -2,140 +2,201 @@ const config = require('./config.json')
 const {success, error} = require('./functions')
 
 const express = require('express')
-const app = express()
-const bodyParser = require('body-parser')
 
+const bodyParser = require('body-parser')
 const morgan = require('morgan')
-//Middleware - catch all url before doing something else with url
-/*app.use((req, res, next) => {
-    console.log('URL : ' + req.url);
-})*/
+
+const mysql = require('mysql')
+const db = mysql.createConnection({
+    host: 'localhost',
+    database: 'nodejsudemy',
+    user: 'root',
+    password: 'root'
+})
+
+db.connect((err) => {
+    if (err) {
+        console.error('Error connecting: ' + err.stack)
+        return
+
+    } else {
+        console.log('Connection database as id :' + db.threadId);
+
+        const app = express()
+        //Middleware - catch all url before doing something else with url
+        /*app.use((req, res, next) => {
+            console.log('URL : ' + req.url);
+        })*/
 
 //gives info about the request url
-app.use(morgan('dev'))
+        app.use(morgan('dev'))
 
 //Parse the data
-app.use(bodyParser.json()) // for parsing application/json
-app.use(bodyParser.urlencoded({extended: true})) // for parsing application/x-www-form-urlencoded
+        app.use(bodyParser.json()) // for parsing application/json
+        app.use(bodyParser.urlencoded({extended: true})) // for parsing application/x-www-form-urlencoded
 
-const members = [
-    {
-        id: 1,
-        name: 'Bob'
-    },
-    {
-        id: 2,
-        name: 'Carl'
-    },
-    {
-        id: 3,
-        name: 'Michael'
-    },
-]
+        let membersRouter = express.Router()
 
-let membersRouter = express.Router()
+        membersRouter.route('/:id')
+            //Get one element member
+            .get(((req, res) => {
 
-membersRouter.route('/:id')
+                db.query('SELECT * FROM members WHERE id = ?', [req.params.id], (err, result) => {
+                    if(err) {
+                        res.json(error(err.message))
 
-    //Get one element member
-    .get(((req, res) => {
+                    } else {
+                        if(result[0] !== undefined) {
+                            res.json(success(result[0]))
+                        } else {
+                            res.json(error('Wrong Id !'))
+                        }
+                    }
+                })
+            }))
 
-        let index = getIndex(req.params.id)
+            //Update one element member
+            .put((req, res) => {
 
-        if (typeof (index) === 'string') {
-            res.json(error(index))
-        } else {
-            res.json(success(members[index]))
-        }
-    }))
+                if(req.body.name) {
+                    db.query('SELECT * FROM members WHERE id = ?', [req.params.id], (err, result) => {
+                        if(err) {
+                            res.json(error(err.message))
 
-    //Update one element member
-    .put((req, res) => {
-        let index = getIndex(req.params.id)
+                        } else {
+                            if(result[0] !== undefined) {
+                                db.query('SELECT * FROM members WHERE name = ? AND id != ?', [
+                                    req.body.name,
+                                    req.params.id], (err, result) => {
+                                    if(err) {
+                                        res.json(error(err.message))
+                                    } else {
+                                        if(result[0] !== undefined) {
+                                            res.json(error('Name already taken !'))
+                                        } else {
+                                            db.query('UPDATE members SET name = ? WHERE id = ?', [
+                                                req.body.name,
+                                                req.params.id], (err, result) => {
 
-        if (typeof (index) === 'string') {
-            res.json(error(index))
+                                                if(err) {
+                                                    res.json(error(err.message))
+                                                } else {
+                                                    res.json(success(true))
+                                                }
+                                            })
+                                        }
+                                    }
+                                })
 
-        } else {
-            let same = false
-
-            for (let i = 0; i < members.length; i++) {
-                if (req.body.name == members[i].name && req.params.id != members[i].id) {
-                    same = true
-                    break
+                            } else {
+                                res.json(error('Wrong Id !'))
+                            }
+                        }
+                    })
+                } else {
+                    res.json(error('No name value'))
                 }
-            }
+            })
 
-            if (same) {
-                res.json(error('Name already taken'))
-            } else {
-                members[index].name = req.body.name
-                res.json(success(true))
-            }
+            //Delete one element member
+            .delete((req, res) => {
 
-        }
-    })
+                db.query('SELECT * FROM members WHERE id = ?', [req.params.id], (err, result) => {
+                    if(err) {
+                        res.json(error(err.message))
+                    } else {
+                        if(result[0] !== undefined) {
 
-    //Delete one element member
-    .delete((req, res) => {
-        let index = getIndex(req.params.id)
+                            db.query('DELETE FROM members WHERE id = ?', [req.params.id], (err, result) => {
+                                if(err) {
+                                    res.json(error(err.message))
+                                } else {
+                                    res.json(success(true))
+                                }
+                            })
 
-        if (typeof (index) === 'string') {
-            res.json(error(index))
+                        } else {
+                            res.json(error('Wrong Id !'))
+                        }
+                    }
+                })
+            })
 
-        } else {
-            members.splice(index, 1)
-            res.json(success(members))
-        }
-    })
+        membersRouter.route('/')
+            //Get all members
+            .get(((req, res) => {
+                if (req.query.max !== undefined && req.query.max > 0) {
+                    db.query('SELECT * FROM members LIMIT 0, ?', [req.query.max], (err, result) => {
+                        if(err) {
+                            res.json(error(err.message))
 
-membersRouter.route('/')
-    //Get all elements members
-    .get(((req, res) => {
-        if (req.query.max !== undefined && req.query.max > 0) {
-            res.json(success(members.slice(0, req.query.max)))
+                        } else {
+                            res.json(success(result))
+                        }
+                    })
 
-        } else if (req.query.max !== undefined) {
-            res.json(error('Wrong max value !'))
+                } else if (req.query.max !== undefined) {
+                    res.json(error('Wrong max value !'))
 
-        } else {
-            res.json(success(members))
-        }
-    }))
+                } else {
+                    db.query('SELECT * FROM members', (err, result) => {
+                        if(err) {
+                            res.json(error(err.message))
 
-    //Create one element member
-    .post((req, res) => {
-
-        let sameName = false
-        for (let i = 0; i < members.length; i++) {
-            if (members[i].name === req.body.name) {
-                sameName = true
-            }
-        }
-
-        if (sameName) {
-            res.json(error('Name already taken !'))
-
-        } else {
-            if (req.body.name) {
-                let member = {
-                    id: createId(),
-                    name: req.body.name
+                        } else {
+                            res.json(success(result))
+                        }
+                    })
                 }
+            }))
 
-                members.push(member)
+            //Create one element member
+            .post((req, res) => {
 
-                res.json(member)
-            }
-        }
+                if(req.body.name) {
 
-    })
+                    db.query('SELECT * FROM members WHERE name = ?', [req.body.name], (err, result) => {
 
-//Call members router manager
-app.use(config.rootAPI + 'members', membersRouter)
+                        if(err) {
+                            res.json(error(err.message))
+                        } else {
 
-//Opens the server
-app.listen(config.port, () => console.log(`Example of app listening at http://localhost:${config.port}`))
+                            if(result[0] !== undefined) {
+                                res.json(error('Name already taken !'))
+                            } else {
+                                db.query('INSERT INTO members(name) VALUES(?)', [req.body.name], (err, result) => {
+                                    if(err) {
+                                        res.json(error(err.message))
+                                    } else {
+                                        db.query('SELECT * FROM members WHERE name = ?', [req.body.name], (err, result) => {
+                                            if(err) {
+                                                res.json(error(err.message))
+                                            } else {
+                                                res.json(success({
+                                                    id: result[0].id,
+                                                    name: result[0].name,
+                                                }))
+                                            }
+                                        })
+                                    }
+                                })
+                            }
+                        }
+                    })
+
+                } else {
+                    res.json(error('No name value'))
+                }
+            })
+
+        //Call members router manager
+        app.use(config.rootAPI + 'members', membersRouter)
+
+        //Opens the server
+        app.listen(config.port, () => console.log(`Example of app listening at http://localhost:${config.port}`))
+
+    }
+})
 
 
 function getIndex(id) {
